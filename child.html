@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onglet Enfant</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #333;
+    }
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      display: none; /* Masqué par défaut */
+    }
+  </style>
+</head>
+<body>
+  <!-- Images associées aux actions des zones -->
+  <img id="topLeft" src="./Images/affiche1.jpg" alt="Image Haut Gauche">
+  <img id="topRight" src="./Images/affiche2.jpg" alt="Image Haut Droite">
+  <img id="midLeft" src="./Images/affiche3.jpg" alt="Image Milieu Gauche">
+  <img id="midRight" src="./Images/affiche4.jpg" alt="Image Milieu Droite">
+  <img id="bottomLeft" src="./Images/affiche5.jpg" alt="Image Bas Gauche">
+  <img id="bottomRight" src="./Images/affiche6.jpg" alt="Image Bas Droite">
+  <img id="veryBottomLeft" src="./Images/affiche7.gif" alt="Image Très Bas Gauche">
+  <img id="veryBottomRight" src="./Images/affiche8.gif" alt="Image Très Bas Droite">
+
+  <script>
+    // Références aux images
+    const imageMap = {
+      topLeft: document.getElementById('topLeft'),
+      topRight: document.getElementById('topRight'),
+      midLeft: document.getElementById('midLeft'),
+      midRight: document.getElementById('midRight'),
+      bottomLeft: document.getElementById('bottomLeft'),
+      bottomRight: document.getElementById('bottomRight'),
+      veryBottomLeft: document.getElementById('veryBottomLeft'),
+      veryBottomRight: document.getElementById('veryBottomRight'),
+    };
+
+    // Masquer toutes les images
+    function hideAllImages() {
+      Object.values(imageMap).forEach(img => (img.style.display = 'none'));
+    }
+
+    // Écouter les messages de la fenêtre parent
+    window.addEventListener('message', event => {
+      const { action } = event.data;
+
+      hideAllImages();
+
+      if (imageMap[action]) {
+        imageMap[action].style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

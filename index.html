@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fenêtre Principale</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #000000;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #444;
+      display: none;
+    }
+    #videoContainer {
+      position: relative;
+      width: 640px;
+      height: 480px;
+      margin-top: 20px;
+      border: 5px solid #ffffff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0px 12px 100px rgb(220, 64, 235);
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Appliquer un effet miroir */
+    }
+    .zone {
+      position: absolute;
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      box-sizing: border-box;
+      width: 10%;
+      height: 10%;
+      object-fit: contain; 
+      pointer-events: none;
+      filter: blur(2px); /* Ajout d'un flou sur les cases */
+      transition: filter 0.3s, box-shadow 0.3s;
+    }
+    .zone#topLeft { top: 5%; left: 5%; }
+    .zone#topRight { top: 5%; right: 5%; }
+    .zone#midLeft { top: 25%; left: 5%; }
+    .zone#midRight { top: 25%; right: 5%; }
+    .zone#bottomLeft { bottom: 25%; left: 5%; }
+    .zone#bottomRight { bottom: 25%; right: 5%; }
+    .zone#veryBottomLeft { bottom: 5%; left: 5%; }
+    .zone#veryBottomRight { bottom: 5%; right: 5%; }
+
+    #actionOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 32px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #000000;
+      color: rgb(0, 0, 0);
+      box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      color: rgb(255, 255, 255);
+    }
+    canvas {
+      display: none;
+    }
+    #handGlow {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.8);
+    }
+
+    #background-video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
+    .zone.selected {
+      border: 4px solid rgba(220, 64, 235, 0.8); /* Une bordure plus large et de couleur violette */
+      box-shadow: 0 0 20px rgba(220, 64, 235, 0.8); /* Ajout d'un effet lumineux */
+      filter: none; /* Retirer le flou */
+    }
+  </style>
+</head>
+<body>
+  <video id="background-video" autoplay loop muted>
+    <source src="./theme.mp4" type="video/mp4">
+    Votre navigateur ne supporte pas la balise vidéo.
+  </video>
+
+  <audio controls autoplay loop>
+    <source src="./audio/music.mp3" type="audio/mpeg">
+  </audio>
+  <h1>Détection de mains en temps réel</h1>
+  <button id="openTab1">Ouvrir Onglet 1</button>
+  <button id="openTab2">Ouvrir Onglet 2</button>
+
+  <div id="videoContainer">
+    <video id="webcam" autoplay playsinline></video>
+    <!-- Images associées aux zones -->
+    <img id="topLeft" class="zone" src="./Images/affiche1.jpg" alt="Haut Gauche">
+    <img id="topRight" class="zone" src="./Images/affiche2.jpg" alt="Haut Droite">
+    <img id="midLeft" class="zone" src="./Images/affiche3.jpg" alt="Milieu Gauche">
+    <img id="midRight" class="zone" src="./Images/affiche4.jpg" alt="Milieu Droite">
+    <img id="bottomLeft" class="zone" src="./Images/affiche5.jpg" alt="Bas Gauche">
+    <img id="bottomRight" class="zone" src="./Images/affiche6.jpg" alt="Bas Droite">
+    <img id="veryBottomLeft" class="zone" src="./Images/affiche7.gif" alt="Très Bas Gauche">
+    <img id="veryBottomRight" class="zone" src="./Images/affiche8.gif" alt="Très Bas Droite">
+    <div id="actionOverlay"></div>
+    <div id="handGlow"></div>
+  </div>
+
+  <canvas id="hiddenCanvas"></canvas>
+
+  <script>
+    let childWindow1, childWindow2;
+    let lastAction = null;
+
+    const handGlow = document.getElementById('handGlow');
+
+    document.getElementById('openTab1').addEventListener('click', () => {
+      childWindow1 = window.open('child.html', '_blank');
+    });
+
+    document.getElementById('openTab2').addEventListener('click', () => {
+      childWindow2 = window.open('child.html', '_blank');
+    });
+
+    function sendMessageToChild(action, target) {
+      if (target === 'left' && childWindow1) {
+        childWindow1.postMessage({ action }, '*');
+      } else if (target === 'right' && childWindow2) {
+        childWindow2.postMessage({ action }, '*');
+      }
+    }
+
+    const video = document.getElementById('webcam');
+    const overlay = document.getElementById('actionOverlay');
+    const canvas = document.getElementById('hiddenCanvas');
+    const ctx = canvas.getContext('2d');
+
+    async function setupCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      video.srcObject = stream;
+      return new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          resolve(video);
+        };
+      });
+    }
+
+    async function main() {
+      await setupCamera();
+      video.play();
+
+      const model = await handpose.load();
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const zones = [
+        { id: 'topLeft', name: 'topLeft', x1: 0.05, y1: 0.05, x2: 0.15, y2: 0.15 },
+        { id: 'topRight', name: 'topRight', x1: 0.85, y1: 0.05, x2: 0.95, y2: 0.15 },
+        { id: 'midLeft', name: 'midLeft', x1: 0.05, y1: 0.25, x2: 0.15, y2: 0.35 },
+        { id: 'midRight', name: 'midRight', x1: 0.85, y1: 0.25, x2: 0.95, y2: 0.35 },
+        { id: 'bottomLeft', name: 'bottomLeft', x1: 0.05, y1: 0.65, x2: 0.15, y2: 0.75 },
+        { id: 'bottomRight', name: 'bottomRight', x1: 0.85, y1: 0.65, x2: 0.95, y2: 0.75 },
+        { id: 'veryBottomLeft', name: 'veryBottomLeft', x1: 0.05, y1: 0.85, x2: 0.15, y2: 0.95 },
+        { id: 'veryBottomRight', name: 'veryBottomRight', x1: 0.85, y1: 0.85, x2: 0.95, y2: 0.95 },
+      ];
+
+      async function detectHands() {
+        const predictions = await model.estimateHands(video);
+
+        overlay.innerText = '';
+
+        if (predictions.length > 0) {
+          const landmarks = predictions[0].landmarks;
+          const [x, y] = landmarks[9];
+          const mirroredX = canvas.width - x;
+          const normalizedX = mirroredX / canvas.width;
+          const normalizedY = y / canvas.height;
+
+          // Positionner l'effet lumineux
+          handGlow.style.left = `${mirroredX}px`;
+          handGlow.style.top = `${y}px`;
+          handGlow.style.width = `40px`;
+          handGlow.style.height = `40px`;
+          handGlow.style.display = 'block';
+
+          for (const zone of zones) {
+            if (
+              normalizedX > zone.x1 &&
+              normalizedX < zone.x2 &&
+              normalizedY > zone.y1 &&
+              normalizedY < zone.y2
+            ) {
+              if (lastAction !== zone.name) {
+                triggerAction(
+                  zone.name,
+                  `Main dans ${zone.name}`,
+                  'rgba(0, 0, 255, 0.5)',
+                  zone.name.includes('Left') ? 'left' : 'right'
+                );
+              }
+              break;
+            }
+          }
+        }
+
+        requestAnimationFrame(detectHands);
+      }
+
+      function triggerAction(action, message, color, target) {
+        // Désélectionner les autres cases du même côté
+        zones.forEach(zone => {
+          const zoneElement = document.getElementById(zone.id);
+          if ((target === 'left' && zone.name.includes('Left')) || 
+              (target === 'right' && zone.name.includes('Right'))) {
+            zoneElement.classList.remove('selected');
+          }
+        });
+
+        // Ajouter la classe .selected à la zone ciblée
+        const selectedZone = document.getElementById(action);
+        if (selectedZone) {
+          selectedZone.classList.add('selected');
+        }
+
+        // Envoyer le message à l'enfant
+        sendMessageToChild(action, target);
+
+        // Mettre à jour les états
+        lastAction = action;
+        overlay.innerText = message;
+      }
+
+      detectHands();
+    }
+
+    main();
+  </script>
+</body>
+</html>
